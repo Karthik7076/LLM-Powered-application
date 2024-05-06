@@ -1,0 +1,79 @@
+import openai
+from datetime import datetime, timedelta
+import json
+
+# Initialize OpenAI API with your API key
+openai.api_key = 'your_openai_api_key'
+
+def process_query(query):
+    # Call OpenAI API to process user query with a history length of 4 messages
+    response = openai.Completion.create(
+        engine="text-davinci-002",
+        prompt=query,
+        max_tokens=100,
+        temperature=0.7,
+        stop=None,
+        n=1,
+        stream=False,
+        logprobs=None,
+        echo=False,
+        history=["User: " + query for query in query_history[-4:]]  # Use last 4 user queries as history
+    )
+
+    # Extract relevant information from OpenAI response
+    parsed_response = response['choices'][0]['text'].strip()
+    parsed_lines = parsed_response.split('\n')
+
+    entities = []
+    parameters = []
+    start_dates = []
+    end_dates = []
+
+    for line in parsed_lines:
+        parts = line.split(':')
+        if len(parts) == 2:
+            key, value = parts[0].strip(), parts[1].strip()
+            if key == 'Entity':
+                entities.append(value)
+            elif key == 'Parameter':
+                parameters.append(value)
+            elif key == 'Start Date':
+                start_dates.append(value)
+            elif key == 'End Date':
+                end_dates.append(value)
+
+    # If start date or end date not extracted, set defaults
+    if not start_dates:
+        start_dates = [(datetime.today() - timedelta(days=365)).strftime('%Y-%m-%d')]
+    if not end_dates:
+        end_dates = [datetime.today().strftime('%Y-%m-%d')]
+
+    # Construct JSON objects
+    json_objects = []
+    for entity, parameter, start_date, end_date in zip(entities, parameters, start_dates, end_dates):
+        json_object = {
+            "entity": entity,
+            "parameter": parameter,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        json_objects.append(json_object)
+
+    return json_objects
+
+def convert_to_json(query):
+    # Process user query
+    data = process_query(query)
+
+    # Convert data to JSON format
+    json_data = json.dumps(data, indent=4)
+
+    return json_data
+
+# Example user queries
+query_history = ["What is the revenue of Amazon?", "Show me the GMV of Flipkart from last year to now."]
+user_query = "Compare the revenue of Amazon and Flipkart."
+
+# Convert user queries to JSON
+result = convert_to_json(user_query)
+print(result)
